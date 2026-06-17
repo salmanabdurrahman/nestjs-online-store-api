@@ -16,11 +16,19 @@ async function bootstrap() {
   const reflector = app.get(Reflector);
   const port = configService.get<number>("app.port", 3000);
   const corsOrigins = configService.get<string[]>("app.corsOrigins", []);
+  const isProduction =
+    configService.get<string>("app.nodeEnv") === "production";
+
+  if (isProduction && corsOrigins.length === 0) {
+    throw new Error(
+      "CORS_ORIGINS must be configured in production. Refusing to start with permissive CORS."
+    );
+  }
 
   app.setGlobalPrefix("api/v1");
   app.use(helmet());
   app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : true,
+    origin: corsOrigins.length > 0 ? corsOrigins : isProduction ? false : true,
     credentials: true,
   });
   app.useGlobalPipes(new ZodValidationPipe());
@@ -29,6 +37,7 @@ async function bootstrap() {
   await setupOpenApi(app);
 
   await app.listen(port);
+  app.enableShutdownHooks();
   logger.log(`Application running on port ${port}`);
 }
 void bootstrap();

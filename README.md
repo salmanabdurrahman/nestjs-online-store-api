@@ -1,98 +1,277 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS Online Store API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+REST API for a simple online store built with NestJS. The API handles JWT authentication, categories, products, cart, order checkout, health checks, and OpenAPI documentation through Scalar.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- NestJS 11 + TypeScript
+- PostgreSQL
+- Prisma ORM
+- Zod + `nestjs-zod`
+- JWT auth with Passport
+- Argon2 password hashing
+- Scalar API Reference + OpenAPI
+- Helmet, CORS allowlist, auth endpoint throttling
+- Jest + Supertest for unit/e2e tests
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Architecture Pattern
 
-## Project setup
+This project uses a **module-first / feature-first architecture**. Each domain has its own module folder containing its controller, service, schema/DTO, and repository when needed.
 
-```bash
-$ pnpm install
+```txt
+src/
+  auth/
+  users/
+  categories/
+  products/
+  carts/
+  orders/
+  health/
+  common/
+  config/
+  database/
 ```
 
-## Compile and run the project
+Why this pattern:
 
-```bash
-# development
-$ pnpm run start
+- Clear domain boundaries; category logic does not mix with products, cart, or orders.
+- Easier to grow as features expand because feature-related files stay close together.
+- Tests and endpoint documentation are easier to trace from each domain module.
+- Aligns with NestJS feature modules and dependency injection concepts.
 
-# watch mode
-$ pnpm run start:dev
+Dependency direction stays simple:
 
-# production mode
-$ pnpm run start:prod
+```txt
+controller -> service -> repository/Prisma
 ```
 
-## Run tests
+`common/` is only for cross-cutting concerns such as guards, decorators, filters, or reusable utilities. Business logic stays inside domain modules.
 
-```bash
-# unit tests
-$ pnpm run test
+## API Modules
 
-# e2e tests
-$ pnpm run test:e2e
+- `Auth`: registration, login, current user profile.
+- `Categories`: public list/detail, admin create/update/delete.
+- `Products`: public list/detail, admin create/update/delete, category relation.
+- `Cart`: customer active cart and item management.
+- `Orders`: atomic checkout from cart, order list/detail, admin status update.
+- `Health`: app + database readiness check.
 
-# test coverage
-$ pnpm run test:cov
+Local base URL:
+
+```txt
+http://localhost:3000/api/v1
 ```
 
-## Deployment
+Scalar docs:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+```txt
+http://localhost:3000/docs
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+OpenAPI JSON:
 
-## Resources
+```txt
+http://localhost:3000/openapi.json
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+## Requirements
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- Modern Node.js version compatible with NestJS 11.
+- pnpm.
+- Local PostgreSQL for development and tests.
 
-## Support
+## Local Setup
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Install dependencies:
 
-## Stay in touch
+```bash
+pnpm install
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Create local env file from the example:
 
-## License
+```bash
+cp .env.example .env
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Update `DATABASE_URL`, `DATABASE_URL_TEST`, and `JWT_SECRET` for your local environment.
+
+## Environment Variables
+
+| Variable                | Required | Example                                                                                | Description                                                                                                                                                                      |
+| ----------------------- | -------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`              | yes      | `development`                                                                          | Runtime environment.                                                                                                                                                             |
+| `PORT`                  | yes      | `3000`                                                                                 | HTTP app port.                                                                                                                                                                   |
+| `DATABASE_URL`          | yes      | `postgresql://postgres:postgres@localhost:5432/nestjs_online_store?schema=public`      | PostgreSQL connection for the app.                                                                                                                                               |
+| `DATABASE_URL_TEST`     | yes      | `postgresql://postgres:postgres@localhost:5432/nestjs_online_store_test?schema=public` | PostgreSQL connection for e2e tests.                                                                                                                                             |
+| `JWT_SECRET`            | yes      | `change-me-in-local-env`                                                               | Secret used to sign JWTs. Use a strong value in `.env`; never commit real secrets.                                                                                               |
+| `JWT_ACCESS_EXPIRES_IN` | yes      | `15m`                                                                                  | Access token lifetime.                                                                                                                                                           |
+| `CORS_ORIGINS`          | yes      | `http://localhost:3000`                                                                | Comma-separated allowed origins. **Required (non-empty) when `NODE_ENV=production`; the app refuses to start otherwise.** In development/test an empty value allows all origins. |
+
+## Database Migration
+
+Generate Prisma client:
+
+```bash
+pnpm run prisma:generate
+```
+
+Run development migrations:
+
+```bash
+pnpm run prisma:migrate:dev
+```
+
+Deploy migrations for non-development environments:
+
+```bash
+pnpm run prisma:migrate:deploy
+```
+
+Open Prisma Studio when needed:
+
+```bash
+pnpm run prisma:studio
+```
+
+## Run App
+
+Development:
+
+```bash
+pnpm run start:dev
+```
+
+Production build:
+
+```bash
+pnpm run build
+pnpm run start:prod
+```
+
+Health check:
+
+```bash
+curl http://localhost:3000/api/v1/health
+```
+
+## Run Tests
+
+Lint:
+
+```bash
+pnpm run lint
+```
+
+Unit tests:
+
+```bash
+pnpm run test
+```
+
+E2E tests:
+
+```bash
+pnpm run test:e2e
+```
+
+Build:
+
+```bash
+pnpm run build
+```
+
+E2E tests use `DATABASE_URL_TEST`. Make sure the test database exists and is safe for test setup reset operations.
+
+## Auth Flow Example
+
+Register customer:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"customer@example.com","password":"Password123","name":"Customer"}'
+```
+
+Login:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"customer@example.com","password":"Password123"}'
+```
+
+Login response includes `accessToken`. Use the token for protected endpoints:
+
+```bash
+curl http://localhost:3000/api/v1/auth/me \
+  -H 'Authorization: Bearer <accessToken>'
+```
+
+Admin endpoints such as category/product creation require a user with the `ADMIN` role.
+
+## Core Endpoints
+
+| Method   | Path                        | Auth   | Description                        |
+| -------- | --------------------------- | ------ | ---------------------------------- |
+| `GET`    | `/api/v1/health`            | Public | App + DB health.                   |
+| `POST`   | `/api/v1/auth/register`     | Public | Register customer.                 |
+| `POST`   | `/api/v1/auth/login`        | Public | Login and receive JWT.             |
+| `GET`    | `/api/v1/auth/me`           | Bearer | Current user.                      |
+| `GET`    | `/api/v1/categories`        | Public | List active categories.            |
+| `GET`    | `/api/v1/categories/:id`    | Public | Category detail.                   |
+| `POST`   | `/api/v1/categories`        | Admin  | Create category.                   |
+| `PATCH`  | `/api/v1/categories/:id`    | Admin  | Update category.                   |
+| `DELETE` | `/api/v1/categories/:id`    | Admin  | Deactivate category.               |
+| `GET`    | `/api/v1/products`          | Public | List active products with filters. |
+| `GET`    | `/api/v1/products/:id`      | Public | Product detail with category.      |
+| `POST`   | `/api/v1/products`          | Admin  | Create product.                    |
+| `PATCH`  | `/api/v1/products/:id`      | Admin  | Update product.                    |
+| `DELETE` | `/api/v1/products/:id`      | Admin  | Deactivate product.                |
+| `GET`    | `/api/v1/cart`              | Bearer | Active cart.                       |
+| `POST`   | `/api/v1/cart/items`        | Bearer | Add cart item.                     |
+| `PATCH`  | `/api/v1/cart/items/:id`    | Bearer | Update item quantity.              |
+| `DELETE` | `/api/v1/cart/items/:id`    | Bearer | Remove item.                       |
+| `POST`   | `/api/v1/orders/checkout`   | Bearer | Checkout active cart atomically.   |
+| `GET`    | `/api/v1/orders`            | Bearer | List own orders.                   |
+| `GET`    | `/api/v1/orders/:id`        | Bearer | Order detail.                      |
+| `PATCH`  | `/api/v1/orders/:id/status` | Admin  | Update order status.               |
+
+## API Docs
+
+Run the app and open:
+
+```txt
+http://localhost:3000/docs
+```
+
+Docs include tags per module, request/response schemas from Zod DTOs, and bearer auth scheme for protected endpoints.
+
+## Security Notes
+
+- Do not commit `.env` or real secrets.
+- Replace `JWT_SECRET` in local/prod with a strong value.
+- Passwords are hashed with Argon2 and never returned in responses.
+- CORS is controlled through `CORS_ORIGINS`.
+- Auth endpoints use basic throttling.
+- The app uses `helmet` for common security headers.
+- Graceful shutdown is enabled via `app.enableShutdownHooks()` (SIGTERM/SIGINT trigger `OnModuleDestroy` lifecycle hooks, including Prisma `$disconnect`).
+
+## Prisma 7 Generated Client
+
+The Prisma schema uses the new `prisma-client` generator which emits **TypeScript** source files into `src/generated/prisma/`. Those sources reference each other with literal `.ts` import paths (e.g. `import "./internal/class.ts"`).
+
+The following `tsconfig.json` compiler options are required so that the emitted JavaScript (both `nest build` output and ts-jest in-memory output) can resolve the dependencies at runtime:
+
+```jsonc
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+  },
+}
+```
+
+For tests, `test/jest-resolver.cjs` is wired as the Jest `resolver` in both `package.json` (unit) and `test/jest-e2e.json` (e2e). It maps `.js` requires that originate from `src/generated/**` back to the corresponding `.ts` source files (which are the only files on disk for that directory; the actual `.js` files only exist in `dist/` after `nest build`).
+
+If you regenerate the Prisma client with a different output strategy (e.g. move it to `node_modules/.prisma/client`, or switch back to the legacy `prisma-client-js` generator), the custom resolver and the two `tsconfig` flags can be removed.

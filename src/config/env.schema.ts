@@ -14,6 +14,11 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+const productionCorsSchema = z.object({
+  NODE_ENV: z.literal("production"),
+  CORS_ORIGINS: z.string().min(1, "CORS_ORIGINS is required in production"),
+});
+
 export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
 
@@ -23,6 +28,16 @@ export function validateEnv(config: Record<string, unknown>): Env {
       .join("; ");
 
     throw new Error(`Invalid environment configuration: ${message}`);
+  }
+
+  if (parsed.data.NODE_ENV === "production") {
+    const prodCheck = productionCorsSchema.safeParse(parsed.data);
+    if (!prodCheck.success) {
+      const message = prodCheck.error.issues
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+        .join("; ");
+      throw new Error(`Invalid environment configuration: ${message}`);
+    }
   }
 
   return parsed.data;
