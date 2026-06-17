@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { INestApplication } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
+import { JwtService } from "@nestjs/jwt";
 import { ZodSerializerInterceptor, ZodValidationPipe } from "nestjs-zod";
 import request from "supertest";
 import { App } from "supertest/types";
@@ -34,6 +35,26 @@ type AuthResponseBody = {
   };
 };
 
+type CategoryResponseBody = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CategoryListResponseBody = {
+  data: CategoryResponseBody[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 describe("AppController (e2e)", () => {
   let app: INestApplication<App>;
   const users: Array<{
@@ -42,6 +63,15 @@ describe("AppController (e2e)", () => {
     passwordHash: string;
     name: string;
     role: "CUSTOMER" | "ADMIN";
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  const categories: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
   }> = [];
@@ -82,10 +112,92 @@ describe("AppController (e2e)", () => {
         }
       ),
     },
+    category: {
+      findMany: jest.fn(({ skip, take }: { skip: number; take: number }) =>
+        Promise.resolve(
+          categories
+            .filter((category) => category.isActive)
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(skip, skip + take)
+        )
+      ),
+      count: jest.fn(() =>
+        Promise.resolve(
+          categories.filter((category) => category.isActive).length
+        )
+      ),
+      findFirst: jest.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          categories.find(
+            (category) => category.id === where.id && category.isActive
+          ) ?? null
+        )
+      ),
+      findUnique: jest.fn(
+        ({ where }: { where: { id?: string; slug?: string } }) =>
+          Promise.resolve(
+            categories.find(
+              (category) =>
+                category.id === where.id || category.slug === where.slug
+            ) ?? null
+          )
+      ),
+      create: jest.fn(
+        ({
+          data,
+        }: {
+          data: {
+            name: string;
+            slug: string;
+            description?: string;
+            isActive?: boolean;
+          };
+        }) => {
+          const now = new Date();
+          const category = {
+            id: `10000000-0000-4000-8000-${String(
+              categories.length + 1
+            ).padStart(12, "0")}`,
+            name: data.name,
+            slug: data.slug,
+            description: data.description ?? null,
+            isActive: data.isActive ?? true,
+            createdAt: now,
+            updatedAt: now,
+          };
+          categories.push(category);
+          return Promise.resolve(category);
+        }
+      ),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Partial<{
+            name: string;
+            slug: string;
+            description: string;
+            isActive: boolean;
+          }>;
+        }) => {
+          const category = categories.find((item) => item.id === where.id);
+
+          if (!category) {
+            throw new Error("Category not found");
+          }
+
+          Object.assign(category, data, { updatedAt: new Date() });
+          return Promise.resolve(category);
+        }
+      ),
+    },
   };
 
   beforeEach(async () => {
     users.length = 0;
+    categories.length = 0;
     jest.clearAllMocks();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -196,6 +308,105 @@ describe("AppController (e2e)", () => {
       role: "CUSTOMER",
     });
     expect(meBody.passwordHash).toBeUndefined();
+  });
+
+  it("categories CRUD flow", async () => {
+    const admin = {
+      id: "00000000-0000-4000-8000-000000000999",
+      email: "admin@example.com",
+      passwordHash: "not-used",
+      name: "Admin User",
+      role: "ADMIN" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    users.push(admin);
+
+    const adminToken = await app.get(JwtService).signAsync({
+      sub: admin.id,
+      email: admin.email,
+      role: admin.role,
+    });
+
+    await request(app.getHttpServer())
+      .post("/api/v1/categories")
+      .send({ name: "Books", slug: "books" })
+      .expect(401);
+
+    const createResponse = await request(app.getHttpServer())
+      .post("/api/v1/categories")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        name: "Books",
+        slug: "books",
+        description: "Book collection",
+      })
+      .expect(201);
+
+    const createdCategory = createResponse.body as CategoryResponseBody;
+
+    expect(createdCategory).toMatchObject({
+      name: "Books",
+      slug: "books",
+      description: "Book collection",
+      isActive: true,
+    });
+
+    await request(app.getHttpServer())
+      .post("/api/v1/categories")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Duplicate Books", slug: "books" })
+      .expect(409);
+
+    const listResponse = await request(app.getHttpServer())
+      .get("/api/v1/categories?page=1&limit=10")
+      .expect(200);
+
+    const listBody = listResponse.body as CategoryListResponseBody;
+
+    expect(listBody.data).toHaveLength(1);
+    expect(listBody.meta).toMatchObject({
+      page: 1,
+      limit: 10,
+      total: 1,
+      totalPages: 1,
+    });
+
+    const detailResponse = await request(app.getHttpServer())
+      .get(`/api/v1/categories/${createdCategory.id}`)
+      .expect(200);
+
+    expect(detailResponse.body).toMatchObject({ slug: "books" });
+
+    const updateResponse = await request(app.getHttpServer())
+      .patch(`/api/v1/categories/${createdCategory.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Updated Books", slug: "updated-books" })
+      .expect(200);
+
+    expect(updateResponse.body).toMatchObject({
+      name: "Updated Books",
+      slug: "updated-books",
+    });
+
+    const deleteResponse = await request(app.getHttpServer())
+      .delete(`/api/v1/categories/${createdCategory.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(deleteResponse.body).toMatchObject({ isActive: false });
+
+    const emptyListResponse = await request(app.getHttpServer())
+      .get("/api/v1/categories")
+      .expect(200);
+
+    expect((emptyListResponse.body as CategoryListResponseBody).data).toEqual(
+      []
+    );
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/categories/${createdCategory.id}`)
+      .expect(404);
   });
 
   afterEach(async () => {
