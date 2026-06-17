@@ -16,6 +16,7 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { ZodSerializerDto } from "nestjs-zod";
+import { ApiErrorResponses } from "../common/decorators/api-error-responses.decorator";
 import { Role } from "../generated/prisma/enums";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -30,6 +31,7 @@ import {
 } from "./schemas/category.schema";
 
 @ApiTags("Categories")
+@ApiErrorResponses([400, 401, 403, 404, 409])
 @Controller("categories")
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}

@@ -3,9 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { CategoryModel } from "../generated/prisma/models/Category";
-import { ProductModel } from "../generated/prisma/models/Product";
-import { CategoriesRepository } from "../categories/categories.repository";
+import { CategoriesService } from "../categories/categories.service";
 import {
   CreateProductInput,
   ListProductsQuery,
@@ -14,13 +12,14 @@ import {
   ProductResponse,
   UpdateProductInput,
 } from "./schemas/product.schema";
-import { ProductsRepository, ProductWithCategory } from "./products.repository";
+import { ProductsRepository } from "./products.repository";
+import { toProductDetailResponse, toProductResponse } from "./products.mapper";
 
 @Injectable()
 export class ProductsService {
   constructor(
     private readonly productsRepository: ProductsRepository,
-    private readonly categoriesRepository: CategoriesRepository
+    private readonly categoriesService: CategoriesService
   ) {}
 
   async findActive(query: ListProductsQuery): Promise<ProductListResponse> {
@@ -30,7 +29,7 @@ export class ProductsService {
     ]);
 
     return {
-      data: products.map((product) => this.toResponse(product)),
+      data: products.map((product) => toProductResponse(product)),
       meta: {
         page: query.page,
         limit: query.limit,
@@ -47,7 +46,7 @@ export class ProductsService {
       throw new NotFoundException("Product not found");
     }
 
-    return this.toDetailResponse(product);
+    return toProductDetailResponse(product);
   }
 
   async create(input: CreateProductInput): Promise<ProductResponse> {
@@ -56,7 +55,7 @@ export class ProductsService {
 
     const product = await this.productsRepository.create(input);
 
-    return this.toResponse(product);
+    return toProductResponse(product);
   }
 
   async update(
@@ -79,7 +78,7 @@ export class ProductsService {
 
     const updatedProduct = await this.productsRepository.update(id, input);
 
-    return this.toResponse(updatedProduct);
+    return toProductResponse(updatedProduct);
   }
 
   async deactivate(id: string): Promise<ProductResponse> {
@@ -91,7 +90,7 @@ export class ProductsService {
 
     const deactivatedProduct = await this.productsRepository.deactivate(id);
 
-    return this.toResponse(deactivatedProduct);
+    return toProductResponse(deactivatedProduct);
   }
 
   private async ensureSlugAvailable(slug: string): Promise<void> {
@@ -103,46 +102,11 @@ export class ProductsService {
   }
 
   private async ensureCategoryActive(categoryId: string): Promise<void> {
-    const category = await this.categoriesRepository.findActiveById(categoryId);
+    const categoryExists =
+      await this.categoriesService.existsActive(categoryId);
 
-    if (!category) {
+    if (!categoryExists) {
       throw new NotFoundException("Category not found");
     }
-  }
-
-  private toResponse(product: ProductModel): ProductResponse {
-    return {
-      id: product.id,
-      categoryId: product.categoryId,
-      name: product.name,
-      slug: product.slug,
-      description: product.description,
-      price: product.price.toString(),
-      stock: product.stock,
-      isActive: product.isActive,
-      createdAt: product.createdAt.toISOString(),
-      updatedAt: product.updatedAt.toISOString(),
-    };
-  }
-
-  private toDetailResponse(
-    product: ProductWithCategory
-  ): ProductDetailResponse {
-    return {
-      ...this.toResponse(product),
-      category: this.toCategoryResponse(product.category),
-    };
-  }
-
-  private toCategoryResponse(category: CategoryModel) {
-    return {
-      id: category.id,
-      name: category.name,
-      slug: category.slug,
-      description: category.description,
-      isActive: category.isActive,
-      createdAt: category.createdAt.toISOString(),
-      updatedAt: category.updatedAt.toISOString(),
-    };
   }
 }

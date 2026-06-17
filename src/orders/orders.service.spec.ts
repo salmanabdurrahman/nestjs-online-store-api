@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import {
   BadRequestException,
   ForbiddenException,
@@ -62,56 +63,72 @@ const order = {
 };
 
 describe("OrdersService", () => {
-  const tx = {
-    cart: { findFirst: jest.fn(), update: jest.fn() },
-    order: { create: jest.fn() },
-    product: { updateMany: jest.fn() },
-  };
-  const prisma = {
-    $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
-      callback(tx)
-    ),
-    order: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+  const ordersRepository = {
+    checkout: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
+    findById: jest.fn(),
+    exists: jest.fn(),
+    updateStatus: jest.fn(),
   };
   let service: OrdersService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new OrdersService(prisma as never);
+    service = new OrdersService(ordersRepository as never);
   });
 
-  it("checks out cart transaction and marks cart checked out", async () => {
-    tx.cart.findFirst.mockResolvedValueOnce(cart);
-    tx.order.create.mockResolvedValueOnce(order);
-    tx.product.updateMany.mockResolvedValueOnce({ count: 1 });
+  it("checks out cart through repository", async () => {
+    ordersRepository.checkout.mockImplementationOnce(
+      (_userId, validateCart) => {
+        validateCart(cart);
+        return order;
+      }
+    );
 
     await expect(service.checkout("user-1")).resolves.toMatchObject({
       id: order.id,
       totalAmount: "20.00",
     });
-    expect(tx.cart.update).toHaveBeenCalledWith({
-      where: { id: cart.id },
-      data: { status: CartStatus.CHECKED_OUT },
+    expect(ordersRepository.checkout).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Function)
+    );
+  });
+
+  it("rejects empty cart and insufficient stock", async () => {
+    ordersRepository.checkout.mockImplementationOnce((_userId, validateCart) =>
+      validateCart({ ...cart, items: [] })
+    );
+    await expect(service.checkout("user-1")).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+
+    ordersRepository.checkout.mockRejectedValueOnce(
+      new BadRequestException("Insufficient stock")
+    );
+    await expect(service.checkout("user-1")).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+  });
+
+  it("returns paginated order list", async () => {
+    ordersRepository.findMany.mockResolvedValueOnce([order]);
+    ordersRepository.count.mockResolvedValueOnce(1);
+
+    await expect(
+      service.findAll(
+        { sub: "user-1", email: "user@example.com", role: Role.CUSTOMER },
+        { page: 1, limit: 10 }
+      )
+    ).resolves.toMatchObject({
+      data: [{ id: order.id }],
+      meta: { total: 1, totalPages: 1 },
     });
   });
 
-  it("rejects empty cart and insufficient stock without partial order", async () => {
-    tx.cart.findFirst.mockResolvedValueOnce({ ...cart, items: [] });
-    await expect(service.checkout("user-1")).rejects.toBeInstanceOf(
-      BadRequestException
-    );
-    expect(tx.order.create).not.toHaveBeenCalled();
-
-    tx.cart.findFirst.mockResolvedValueOnce(cart);
-    tx.order.create.mockResolvedValueOnce(order);
-    tx.product.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(service.checkout("user-1")).rejects.toBeInstanceOf(
-      BadRequestException
-    );
-  });
-
   it("guards ownership and updates status", async () => {
-    prisma.order.findUnique.mockResolvedValueOnce(order);
+    ordersRepository.findById.mockResolvedValueOnce(order);
     await expect(
       service.findOne(
         { sub: "other-user", email: "other@example.com", role: Role.CUSTOMER },
@@ -119,13 +136,13 @@ describe("OrdersService", () => {
       )
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    prisma.order.findUnique.mockResolvedValueOnce(null);
+    ordersRepository.exists.mockResolvedValueOnce(null);
     await expect(
       service.updateStatus("missing", { status: OrderStatus.PAID })
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    prisma.order.findUnique.mockResolvedValueOnce(order);
-    prisma.order.update.mockResolvedValueOnce({
+    ordersRepository.exists.mockResolvedValueOnce(order);
+    ordersRepository.updateStatus.mockResolvedValueOnce({
       ...order,
       status: OrderStatus.PAID,
     });

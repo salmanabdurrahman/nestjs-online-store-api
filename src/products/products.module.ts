@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
-import { CategoriesRepository } from "../categories/categories.repository";
+import { CategoriesModule } from "../categories/categories.module";
 import { ProductsController } from "./products.controller";
 import { ProductsRepository } from "./products.repository";
 import { ProductsService } from "./products.service";
 
 @Module({
+  imports: [CategoriesModule],
   controllers: [ProductsController],
-  providers: [ProductsService, ProductsRepository, CategoriesRepository],
+  providers: [ProductsService, ProductsRepository],
 })
 export class ProductsModule {}

@@ -42,10 +42,10 @@ Why this pattern:
 Dependency direction stays simple:
 
 ```txt
-controller -> service -> repository/Prisma
+controller -> service -> repository -> Prisma
 ```
 
-`common/` is only for cross-cutting concerns such as guards, decorators, filters, or reusable utilities. Business logic stays inside domain modules.
+Domain modules use repositories for data access. Modules export only contracts used by other modules; for example Products consumes `CategoriesService` through `CategoriesModule` rather than registering category data-access providers directly. `common/` is only for cross-cutting concerns such as guards, decorators, filters, or reusable utilities. Business logic stays inside domain modules.
 
 ## API Modules
 
@@ -226,32 +226,34 @@ curl http://localhost:3000/api/v1/auth/me \
 
 Admin endpoints such as category/product creation require a user with the `ADMIN` role.
 
+For local development, create an admin by registering a normal user, then update only that local/test database row to `ADMIN` through Prisma Studio or a one-off local script. Do not hardcode admin credentials or commit seed passwords. Production admin creation should use an approved operational path against the target environment.
+
 ## Core Endpoints
 
-| Method   | Path                        | Auth   | Description                        |
-| -------- | --------------------------- | ------ | ---------------------------------- |
-| `GET`    | `/api/v1/health`            | Public | App + DB health.                   |
-| `POST`   | `/api/v1/auth/register`     | Public | Register customer.                 |
-| `POST`   | `/api/v1/auth/login`        | Public | Login and receive JWT.             |
-| `GET`    | `/api/v1/auth/me`           | Bearer | Current user.                      |
-| `GET`    | `/api/v1/categories`        | Public | List active categories.            |
-| `GET`    | `/api/v1/categories/:id`    | Public | Category detail.                   |
-| `POST`   | `/api/v1/categories`        | Admin  | Create category.                   |
-| `PATCH`  | `/api/v1/categories/:id`    | Admin  | Update category.                   |
-| `DELETE` | `/api/v1/categories/:id`    | Admin  | Deactivate category.               |
-| `GET`    | `/api/v1/products`          | Public | List active products with filters. |
-| `GET`    | `/api/v1/products/:id`      | Public | Product detail with category.      |
-| `POST`   | `/api/v1/products`          | Admin  | Create product.                    |
-| `PATCH`  | `/api/v1/products/:id`      | Admin  | Update product.                    |
-| `DELETE` | `/api/v1/products/:id`      | Admin  | Deactivate product.                |
-| `GET`    | `/api/v1/cart`              | Bearer | Active cart.                       |
-| `POST`   | `/api/v1/cart/items`        | Bearer | Add cart item.                     |
-| `PATCH`  | `/api/v1/cart/items/:id`    | Bearer | Update item quantity.              |
-| `DELETE` | `/api/v1/cart/items/:id`    | Bearer | Remove item.                       |
-| `POST`   | `/api/v1/orders/checkout`   | Bearer | Checkout active cart atomically.   |
-| `GET`    | `/api/v1/orders`            | Bearer | List own orders.                   |
-| `GET`    | `/api/v1/orders/:id`        | Bearer | Order detail.                      |
-| `PATCH`  | `/api/v1/orders/:id/status` | Admin  | Update order status.               |
+| Method   | Path                             | Auth   | Description                        |
+| -------- | -------------------------------- | ------ | ---------------------------------- |
+| `GET`    | `/api/v1/health`                 | Public | App + DB health.                   |
+| `POST`   | `/api/v1/auth/register`          | Public | Register customer.                 |
+| `POST`   | `/api/v1/auth/login`             | Public | Login and receive JWT.             |
+| `GET`    | `/api/v1/auth/me`                | Bearer | Current user.                      |
+| `GET`    | `/api/v1/categories`             | Public | List active categories.            |
+| `GET`    | `/api/v1/categories/:id`         | Public | Category detail.                   |
+| `POST`   | `/api/v1/categories`             | Admin  | Create category.                   |
+| `PATCH`  | `/api/v1/categories/:id`         | Admin  | Update category.                   |
+| `DELETE` | `/api/v1/categories/:id`         | Admin  | Deactivate category.               |
+| `GET`    | `/api/v1/products`               | Public | List active products with filters. |
+| `GET`    | `/api/v1/products/:id`           | Public | Product detail with category.      |
+| `POST`   | `/api/v1/products`               | Admin  | Create product.                    |
+| `PATCH`  | `/api/v1/products/:id`           | Admin  | Update product.                    |
+| `DELETE` | `/api/v1/products/:id`           | Admin  | Deactivate product.                |
+| `GET`    | `/api/v1/cart`                   | Bearer | Active cart.                       |
+| `POST`   | `/api/v1/cart/items`             | Bearer | Add cart item.                     |
+| `PATCH`  | `/api/v1/cart/items/:id`         | Bearer | Update item quantity.              |
+| `DELETE` | `/api/v1/cart/items/:id`         | Bearer | Remove item.                       |
+| `POST`   | `/api/v1/orders/checkout`        | Bearer | Checkout active cart atomically.   |
+| `GET`    | `/api/v1/orders?page=1&limit=10` | Bearer | List own orders with pagination.   |
+| `GET`    | `/api/v1/orders/:id`             | Bearer | Order detail.                      |
+| `PATCH`  | `/api/v1/orders/:id/status`      | Admin  | Update order status.               |
 
 ## API Docs
 
@@ -261,7 +263,14 @@ Run the app and open:
 http://localhost:3000/docs
 ```
 
-Docs include tags per module, request/response schemas from Zod DTOs, and bearer auth scheme for protected endpoints.
+Docs include tags per module, request/response schemas from Zod DTOs, standard error response schemas (`400`, `401`, `403`, `404`, `409`) for important endpoints, and bearer auth scheme for protected endpoints.
+
+## Domain Policies
+
+- Category deactivation is soft-delete style: the category becomes inactive, but existing products keep their own `isActive` value unchanged.
+- Public product queries require both product and category to be active, so products under inactive categories disappear from public catalog responses.
+- Cart add-item uses the same visibility rule and rejects inactive products or products under inactive categories.
+- Existing order item snapshots stay unchanged when category/product visibility changes.
 
 ## Security Notes
 

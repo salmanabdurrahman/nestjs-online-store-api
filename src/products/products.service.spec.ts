@@ -36,14 +36,14 @@ describe("ProductsService", () => {
     update: jest.fn(),
     deactivate: jest.fn(),
   };
-  const categoriesRepository = { findActiveById: jest.fn() };
+  const categoriesService = { existsActive: jest.fn() };
   let service: ProductsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     service = new ProductsService(
       productsRepository as never,
-      categoriesRepository as never
+      categoriesService as never
     );
   });
 
@@ -80,7 +80,7 @@ describe("ProductsService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     productsRepository.findBySlug.mockResolvedValueOnce(null);
-    categoriesRepository.findActiveById.mockResolvedValueOnce(null);
+    categoriesService.existsActive.mockResolvedValueOnce(false);
     await expect(
       service.create({
         categoryId: category.id,

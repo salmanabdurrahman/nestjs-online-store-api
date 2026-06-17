@@ -30,14 +30,26 @@ export const orderResponseSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+export const listOrdersQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(10),
+});
+
 export const orderListResponseSchema = z.object({
   data: z.array(orderResponseSchema),
+  meta: z.object({
+    page: z.number().int().positive(),
+    limit: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  }),
 });
 
 export const updateOrderStatusSchema = z.object({
   status: orderStatusSchema,
 });
 
+export class ListOrdersQueryDto extends createZodDto(listOrdersQuerySchema) {}
 export class OrderResponseDto extends createZodDto(orderResponseSchema) {}
 export class OrderListResponseDto extends createZodDto(
   orderListResponseSchema
@@ -46,6 +58,7 @@ export class UpdateOrderStatusDto extends createZodDto(
   updateOrderStatusSchema
 ) {}
 
+export type ListOrdersQuery = z.infer<typeof listOrdersQuerySchema>;
 export type OrderResponse = z.infer<typeof orderResponseSchema>;
 export type OrderListResponse = z.infer<typeof orderListResponseSchema>;
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;

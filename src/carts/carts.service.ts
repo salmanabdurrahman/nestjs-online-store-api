@@ -4,22 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { CartStatus } from "../generated/prisma/enums";
-import { Prisma } from "../generated/prisma/client";
-import { PrismaService } from "../database/prisma.service";
+import { toProductResponse } from "../products/products.mapper";
 import {
   AddCartItemInput,
   CartResponse,
   UpdateCartItemInput,
 } from "./schemas/cart.schema";
-
-type CartWithItems = Prisma.CartGetPayload<{
-  include: { items: { include: { product: true } } };
-}>;
+import { CartsRepository, CartWithItems } from "./carts.repository";
 
 @Injectable()
 export class CartsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly cartsRepository: CartsRepository) {}
 
   async getActiveCart(userId: string): Promise<CartResponse> {
     const cart = await this.findOrCreateActiveCart(userId);
@@ -31,13 +26,9 @@ export class CartsService {
     userId: string,
     input: AddCartItemInput
   ): Promise<CartResponse> {
-    const product = await this.prisma.product.findFirst({
-      where: {
-        id: input.productId,
-        isActive: true,
-        category: { isActive: true },
-      },
-    });
+    const product = await this.cartsRepository.findActiveProduct(
+      input.productId
+    );
 
     if (!product) {
       throw new NotFoundException("Product not found");
@@ -52,18 +43,13 @@ export class CartsService {
     this.ensureStockAvailable(product.stock, nextQuantity);
 
     if (existingItem) {
-      await this.prisma.cartItem.update({
-        where: { id: existingItem.id },
-        data: { quantity: nextQuantity },
-      });
+      await this.cartsRepository.updateItem(existingItem.id, nextQuantity);
     } else {
-      await this.prisma.cartItem.create({
-        data: {
-          cartId: cart.id,
-          productId: product.id,
-          quantity: input.quantity,
-          unitPriceSnapshot: product.price,
-        },
+      await this.cartsRepository.createItem({
+        cartId: cart.id,
+        productId: product.id,
+        quantity: input.quantity,
+        unitPriceSnapshot: product.price,
       });
     }
 
@@ -88,10 +74,7 @@ export class CartsService {
 
     this.ensureStockAvailable(item.product.stock, input.quantity);
 
-    await this.prisma.cartItem.update({
-      where: { id: item.id },
-      data: { quantity: input.quantity },
-    });
+    await this.cartsRepository.updateItem(item.id, input.quantity);
 
     return this.getActiveCart(userId);
   }
@@ -108,7 +91,7 @@ export class CartsService {
       throw new ForbiddenException("Cart item does not belong to active cart");
     }
 
-    await this.prisma.cartItem.delete({ where: { id: item.id } });
+    await this.cartsRepository.deleteItem(item.id);
 
     return this.getActiveCart(userId);
   }
@@ -120,9 +103,7 @@ export class CartsService {
       return existingCart;
     }
 
-    await this.prisma.cart.create({
-      data: { userId, status: CartStatus.ACTIVE },
-    });
+    await this.cartsRepository.createActiveCart(userId);
 
     const cart = await this.findActiveCart(userId);
 
@@ -134,15 +115,7 @@ export class CartsService {
   }
 
   private findActiveCart(userId: string): Promise<CartWithItems | null> {
-    return this.prisma.cart.findFirst({
-      where: { userId, status: CartStatus.ACTIVE },
-      include: {
-        items: {
-          orderBy: { createdAt: "asc" },
-          include: { product: true },
-        },
-      },
-    });
+    return this.cartsRepository.findActiveCart(userId);
   }
 
   private ensureStockAvailable(stock: number, quantity: number): void {
@@ -161,18 +134,7 @@ export class CartsService {
         productId: item.productId,
         quantity: item.quantity,
         unitPriceSnapshot: item.unitPriceSnapshot.toString(),
-        product: {
-          id: item.product.id,
-          categoryId: item.product.categoryId,
-          name: item.product.name,
-          slug: item.product.slug,
-          description: item.product.description,
-          price: item.product.price.toString(),
-          stock: item.product.stock,
-          isActive: item.product.isActive,
-          createdAt: item.product.createdAt.toISOString(),
-          updatedAt: item.product.updatedAt.toISOString(),
-        },
+        product: toProductResponse(item.product),
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })),

@@ -108,6 +108,16 @@ export type OrderResponseBody = {
   }>;
 };
 
+export type OrderListResponseBody = {
+  data: OrderResponseBody[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 export function setupE2eContext() {
   let app: INestApplication<App>;
   const users: Array<{
@@ -431,7 +441,7 @@ export function setupE2eContext() {
       }),
     },
     order: {
-      findMany: jest.fn(({ where }) =>
+      findMany: jest.fn(({ where, skip = 0, take = orders.length }) =>
         Promise.resolve(
           orders
             .filter(
@@ -439,7 +449,16 @@ export function setupE2eContext() {
                 where?.userId === undefined || order.userId === where.userId
             )
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(skip, skip + take)
             .map(serializeOrder)
+        )
+      ),
+      count: jest.fn(({ where }) =>
+        Promise.resolve(
+          orders.filter(
+            (order) =>
+              where?.userId === undefined || order.userId === where.userId
+          ).length
         )
       ),
       findUnique: jest.fn(({ where, include }) => {

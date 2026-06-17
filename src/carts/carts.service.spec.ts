@@ -36,46 +36,52 @@ const cart = {
 };
 
 describe("CartsService", () => {
-  const prisma = {
-    product: { findFirst: jest.fn() },
-    cart: { findFirst: jest.fn(), create: jest.fn() },
-    cartItem: { create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  const cartsRepository = {
+    findActiveProduct: jest.fn(),
+    findActiveCart: jest.fn(),
+    createActiveCart: jest.fn(),
+    createItem: jest.fn(),
+    updateItem: jest.fn(),
+    deleteItem: jest.fn(),
   };
   let service: CartsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CartsService(prisma as never);
+    service = new CartsService(cartsRepository as never);
   });
 
   it("merges quantity for same product", async () => {
-    prisma.product.findFirst.mockResolvedValueOnce(product);
-    prisma.cart.findFirst.mockResolvedValue(cart);
-    prisma.cartItem.update.mockResolvedValueOnce({ ...cartItem, quantity: 3 });
+    cartsRepository.findActiveProduct.mockResolvedValueOnce(product);
+    cartsRepository.findActiveCart.mockResolvedValue(cart);
+    cartsRepository.updateItem.mockResolvedValueOnce({
+      ...cartItem,
+      quantity: 3,
+    });
 
     await service.addItem("user-1", { productId: product.id, quantity: 2 });
 
-    expect(prisma.cartItem.update).toHaveBeenCalledWith({
-      where: { id: cartItem.id },
-      data: { quantity: 3 },
-    });
+    expect(cartsRepository.updateItem).toHaveBeenCalledWith(cartItem.id, 3);
   });
 
   it("rejects inactive/missing product and insufficient stock", async () => {
-    prisma.product.findFirst.mockResolvedValueOnce(null);
+    cartsRepository.findActiveProduct.mockResolvedValueOnce(null);
     await expect(
       service.addItem("user-1", { productId: product.id, quantity: 1 })
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    prisma.product.findFirst.mockResolvedValueOnce({ ...product, stock: 1 });
-    prisma.cart.findFirst.mockResolvedValueOnce(cart);
+    cartsRepository.findActiveProduct.mockResolvedValueOnce({
+      ...product,
+      stock: 1,
+    });
+    cartsRepository.findActiveCart.mockResolvedValueOnce(cart);
     await expect(
       service.addItem("user-1", { productId: product.id, quantity: 2 })
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("throws not found when updating/removing missing item", async () => {
-    prisma.cart.findFirst.mockResolvedValue({ ...cart, items: [] });
+    cartsRepository.findActiveCart.mockResolvedValue({ ...cart, items: [] });
 
     await expect(
       service.updateItem("user-1", "missing", { quantity: 1 })

@@ -216,6 +216,17 @@ describe("products (e2e)", () => {
       category: { id: category.id, slug: "electronics" },
     });
 
+    await request(ctx.app.getHttpServer())
+      .delete(`/api/v1/categories/${category.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(ctx.findProduct(createdProduct.id)?.isActive).toBe(true);
+
+    await request(ctx.app.getHttpServer())
+      .get(`/api/v1/products/${createdProduct.id}`)
+      .expect(404);
+
     const updateResponse = await request(ctx.app.getHttpServer())
       .patch(`/api/v1/products/${createdProduct.id}`)
 

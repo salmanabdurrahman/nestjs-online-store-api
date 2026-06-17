@@ -10,11 +10,13 @@ import {
   LoginDto,
   RegisterDto,
 } from "./schemas/auth.schema";
+import { ApiErrorResponses } from "../common/decorators/api-error-responses.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { UsersService } from "../users/users.service";
 
 @ApiTags("Auth")
+@ApiErrorResponses([400, 401, 409])
 @Controller("auth")
 export class AuthController {
   constructor(

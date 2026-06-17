@@ -15,6 +15,7 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { ZodSerializerDto } from "nestjs-zod";
+import { ApiErrorResponses } from "../common/decorators/api-error-responses.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import type { AuthUser } from "../auth/auth.types";
@@ -26,6 +27,7 @@ import {
 } from "./schemas/cart.schema";
 
 @ApiTags("Cart")
+@ApiErrorResponses([400, 401, 403, 404])
 @ApiBearerAuth("bearer")
 @UseGuards(JwtAuthGuard)
 @Controller("cart")

@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@nestjs/swagger";
 import { ZodSerializerDto } from "nestjs-zod";
 import type { AuthUser } from "../auth/auth.types";
+import { ApiErrorResponses } from "../common/decorators/api-error-responses.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -22,12 +24,14 @@ import { RolesGuard } from "../common/guards/roles.guard";
 import { Role } from "../generated/prisma/enums";
 import { OrdersService } from "./orders.service";
 import {
+  ListOrdersQueryDto,
   OrderListResponseDto,
   OrderResponseDto,
   UpdateOrderStatusDto,
 } from "./schemas/order.schema";
 
 @ApiTags("Orders")
+@ApiErrorResponses([400, 401, 403, 404])
 @ApiBearerAuth("bearer")
 @UseGuards(JwtAuthGuard)
 @Controller("orders")
@@ -44,8 +48,8 @@ export class OrdersController {
   @Get()
   @ZodSerializerDto(OrderListResponseDto)
   @ApiOkResponse({ type: OrderListResponseDto })
-  findAll(@CurrentUser() user: AuthUser) {
-    return this.ordersService.findAll(user);
+  findAll(@CurrentUser() user: AuthUser, @Query() query: ListOrdersQueryDto) {
+    return this.ordersService.findAll(user, query);
   }
 
   @Get(":id")

@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { CategoryModel } from "../generated/prisma/models/Category";
 import {
   CategoryListResponse,
   CategoryResponse,
@@ -12,6 +11,7 @@ import {
   UpdateCategoryInput,
 } from "./schemas/category.schema";
 import { CategoriesRepository } from "./categories.repository";
+import { toCategoryResponse } from "./categories.mapper";
 
 @Injectable()
 export class CategoriesService {
@@ -24,7 +24,7 @@ export class CategoriesService {
     ]);
 
     return {
-      data: categories.map((category) => this.toResponse(category)),
+      data: categories.map((category) => toCategoryResponse(category)),
       meta: {
         page: query.page,
         limit: query.limit,
@@ -41,7 +41,13 @@ export class CategoriesService {
       throw new NotFoundException("Category not found");
     }
 
-    return this.toResponse(category);
+    return toCategoryResponse(category);
+  }
+
+  async existsActive(id: string): Promise<boolean> {
+    const category = await this.categoriesRepository.findActiveById(id);
+
+    return Boolean(category);
   }
 
   async create(input: CreateCategoryInput): Promise<CategoryResponse> {
@@ -49,7 +55,7 @@ export class CategoriesService {
 
     const category = await this.categoriesRepository.create(input);
 
-    return this.toResponse(category);
+    return toCategoryResponse(category);
   }
 
   async update(
@@ -68,7 +74,7 @@ export class CategoriesService {
 
     const updatedCategory = await this.categoriesRepository.update(id, input);
 
-    return this.toResponse(updatedCategory);
+    return toCategoryResponse(updatedCategory);
   }
 
   async deactivate(id: string): Promise<CategoryResponse> {
@@ -80,7 +86,7 @@ export class CategoriesService {
 
     const deactivatedCategory = await this.categoriesRepository.deactivate(id);
 
-    return this.toResponse(deactivatedCategory);
+    return toCategoryResponse(deactivatedCategory);
   }
 
   private async ensureSlugAvailable(slug: string): Promise<void> {
@@ -89,17 +95,5 @@ export class CategoriesService {
     if (existingCategory) {
       throw new ConflictException("Category slug already exists");
     }
-  }
-
-  private toResponse(category: CategoryModel): CategoryResponse {
-    return {
-      id: category.id,
-      name: category.name,
-      slug: category.slug,
-      description: category.description,
-      isActive: category.isActive,
-      createdAt: category.createdAt.toISOString(),
-      updatedAt: category.updatedAt.toISOString(),
-    };
   }
 }
