@@ -49,7 +49,7 @@ describe("products (e2e)", () => {
 
       .set("Authorization", `Bearer ${adminToken}`)
 
-      .send({ name: "Electronics", slug: "electronics" })
+      .send({ name: "Electronics" })
 
       .expect(201);
 
@@ -120,8 +120,6 @@ describe("products (e2e)", () => {
 
         name: "Laptop",
 
-        slug: "laptop",
-
         description: "Portable computer",
 
         price: 1500,
@@ -167,6 +165,30 @@ describe("products (e2e)", () => {
       })
 
       .expect(409);
+
+    const duplicateGeneratedProductResponse = await request(
+      ctx.app.getHttpServer()
+    )
+      .post("/api/v1/products")
+
+      .set("Authorization", `Bearer ${adminToken}`)
+
+      .send({
+        categoryId: category.id,
+
+        name: "Laptop",
+
+        price: 100,
+
+        stock: 1,
+      })
+
+      .expect(201);
+
+    const duplicateGeneratedProduct =
+      duplicateGeneratedProductResponse.body as ProductResponseBody;
+
+    expect(duplicateGeneratedProduct.slug).toMatch(/^laptop-[a-f0-9]{6}$/);
 
     await request(ctx.app.getHttpServer())
       .get("/api/v1/products?minPrice=2000&maxPrice=1000")

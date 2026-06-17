@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { CategoriesService } from "./categories.service";
+import { CategoryCreateData } from "./categories.repository";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 const category = {
@@ -42,7 +43,33 @@ describe("CategoriesService", () => {
     });
   });
 
-  it("rejects duplicate slug", async () => {
+  it("auto-generates slug from name", async () => {
+    repository.findBySlug.mockResolvedValueOnce(null);
+    repository.create.mockResolvedValueOnce(category);
+
+    await expect(service.create({ name: "Books" })).resolves.toMatchObject({
+      slug: "books",
+    });
+    expect(repository.create).toHaveBeenCalledWith({
+      name: "Books",
+      slug: "books",
+    });
+  });
+
+  it("appends random suffix for duplicate generated slug", async () => {
+    repository.findBySlug
+      .mockResolvedValueOnce(category)
+      .mockResolvedValueOnce(null);
+    repository.create.mockImplementationOnce(({ slug }: CategoryCreateData) =>
+      Promise.resolve({ ...category, slug })
+    );
+
+    const result = await service.create({ name: "Books" });
+
+    expect(result.slug).toMatch(/^books-[a-f0-9]{6}$/);
+  });
+
+  it("rejects duplicate explicit slug", async () => {
     repository.findBySlug.mockResolvedValueOnce(category);
 
     await expect(

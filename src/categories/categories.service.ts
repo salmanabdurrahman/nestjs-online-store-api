@@ -12,6 +12,7 @@ import {
 } from "./schemas/category.schema";
 import { CategoriesRepository } from "./categories.repository";
 import { toCategoryResponse } from "./categories.mapper";
+import { createSlug, createSlugWithRandomSuffix } from "../common/utils/slug";
 
 @Injectable()
 export class CategoriesService {
@@ -51,9 +52,13 @@ export class CategoriesService {
   }
 
   async create(input: CreateCategoryInput): Promise<CategoryResponse> {
-    await this.ensureSlugAvailable(input.slug);
+    const slug = input.slug ?? (await this.generateAvailableSlug(input.name));
 
-    const category = await this.categoriesRepository.create(input);
+    if (input.slug) {
+      await this.ensureSlugAvailable(input.slug);
+    }
+
+    const category = await this.categoriesRepository.create({ ...input, slug });
 
     return toCategoryResponse(category);
   }
@@ -68,11 +73,20 @@ export class CategoriesService {
       throw new NotFoundException("Category not found");
     }
 
+    const slug = input.slug
+      ? input.slug
+      : input.name
+        ? await this.generateAvailableSlug(input.name, category.id)
+        : undefined;
+
     if (input.slug && input.slug !== category.slug) {
       await this.ensureSlugAvailable(input.slug);
     }
 
-    const updatedCategory = await this.categoriesRepository.update(id, input);
+    const updatedCategory = await this.categoriesRepository.update(id, {
+      ...input,
+      ...(slug ? { slug } : {}),
+    });
 
     return toCategoryResponse(updatedCategory);
   }
@@ -95,5 +109,24 @@ export class CategoriesService {
     if (existingCategory) {
       throw new ConflictException("Category slug already exists");
     }
+  }
+
+  private async generateAvailableSlug(
+    name: string,
+    ignoredId?: string
+  ): Promise<string> {
+    const slug = createSlug(name);
+    const existingCategory = await this.categoriesRepository.findBySlug(slug);
+
+    if (!existingCategory || existingCategory.id === ignoredId) {
+      return slug;
+    }
+
+    let candidate = createSlugWithRandomSuffix(slug);
+    while (await this.categoriesRepository.findBySlug(candidate)) {
+      candidate = createSlugWithRandomSuffix(slug);
+    }
+
+    return candidate;
   }
 }

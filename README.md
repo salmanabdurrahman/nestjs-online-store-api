@@ -287,6 +287,7 @@ Docs include tags per module, request/response schemas from Zod DTOs, standard e
 
 ## Domain Policies
 
+- Category and product `slug` fields are optional on create/update. When omitted with `name`, the API generates a URL-friendly slug from `name`; if that generated slug already exists, a random hex suffix is appended (for example `books-a1b2c3`). Explicit duplicate slugs still return `409`.
 - Category deactivation is soft-delete style: the category becomes inactive, but existing products keep their own `isActive` value unchanged.
 - Public product queries require both product and category to be active, so products under inactive categories disappear from public catalog responses.
 - Cart add-item uses the same visibility rule and rejects inactive products or products under inactive categories.

@@ -81,8 +81,6 @@ describe("categories (e2e)", () => {
       .send({
         name: "Books",
 
-        slug: "books",
-
         description: "Book collection",
       })
 
@@ -100,6 +98,22 @@ describe("categories (e2e)", () => {
       isActive: true,
     });
 
+    const duplicateGeneratedSlugResponse = await request(
+      ctx.app.getHttpServer()
+    )
+      .post("/api/v1/categories")
+
+      .set("Authorization", `Bearer ${adminToken}`)
+
+      .send({ name: "Books" })
+
+      .expect(201);
+
+    const duplicateGeneratedCategory =
+      duplicateGeneratedSlugResponse.body as CategoryResponseBody;
+
+    expect(duplicateGeneratedCategory.slug).toMatch(/^books-[a-f0-9]{6}$/);
+
     await request(ctx.app.getHttpServer())
       .post("/api/v1/categories")
 
@@ -116,14 +130,14 @@ describe("categories (e2e)", () => {
 
     const listBody = listResponse.body as CategoryListResponseBody;
 
-    expect(listBody.data).toHaveLength(1);
+    expect(listBody.data).toHaveLength(2);
 
     expect(listBody.meta).toMatchObject({
       page: 1,
 
       limit: 10,
 
-      total: 1,
+      total: 2,
 
       totalPages: 1,
     });
@@ -158,6 +172,13 @@ describe("categories (e2e)", () => {
       .expect(200);
 
     expect(deleteResponse.body).toMatchObject({ isActive: false });
+
+    await request(ctx.app.getHttpServer())
+      .delete(`/api/v1/categories/${duplicateGeneratedCategory.id}`)
+
+      .set("Authorization", `Bearer ${adminToken}`)
+
+      .expect(200);
 
     const emptyListResponse = await request(ctx.app.getHttpServer())
       .get("/api/v1/categories")

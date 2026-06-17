@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { ProductsService } from "./products.service";
+import { ProductCreateData } from "./products.repository";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 const decimal = (value: number) => ({ toString: () => value.toFixed(2) });
@@ -67,7 +68,48 @@ describe("ProductsService", () => {
     expect(productsRepository.countActive).toHaveBeenCalledWith(query);
   });
 
-  it("rejects duplicate slug and inactive/missing category", async () => {
+  it("auto-generates slug from name", async () => {
+    productsRepository.findBySlug.mockResolvedValueOnce(null);
+    categoriesService.existsActive.mockResolvedValueOnce(true);
+    productsRepository.create.mockResolvedValueOnce(product);
+
+    await expect(
+      service.create({
+        categoryId: category.id,
+        name: "Book",
+        price: 10,
+        stock: 1,
+      })
+    ).resolves.toMatchObject({ slug: "book" });
+    expect(productsRepository.create).toHaveBeenCalledWith({
+      categoryId: category.id,
+      name: "Book",
+      price: 10,
+      stock: 1,
+      slug: "book",
+    });
+  });
+
+  it("appends random suffix for duplicate generated slug", async () => {
+    productsRepository.findBySlug
+      .mockResolvedValueOnce(product)
+      .mockResolvedValueOnce(null);
+    categoriesService.existsActive.mockResolvedValueOnce(true);
+    productsRepository.create.mockImplementationOnce(
+      ({ slug }: ProductCreateData) => Promise.resolve({ ...product, slug })
+    );
+
+    const result = await service.create({
+      categoryId: category.id,
+      name: "Book",
+      price: 10,
+      stock: 1,
+    });
+
+    expect(result.slug).toMatch(/^book-[a-f0-9]{6}$/);
+  });
+
+  it("rejects duplicate explicit slug and inactive/missing category", async () => {
     productsRepository.findBySlug.mockResolvedValueOnce(product);
     await expect(
       service.create({

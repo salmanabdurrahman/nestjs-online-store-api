@@ -14,6 +14,7 @@ import {
 } from "./schemas/product.schema";
 import { ProductsRepository } from "./products.repository";
 import { toProductDetailResponse, toProductResponse } from "./products.mapper";
+import { createSlug, createSlugWithRandomSuffix } from "../common/utils/slug";
 
 @Injectable()
 export class ProductsService {
@@ -50,10 +51,15 @@ export class ProductsService {
   }
 
   async create(input: CreateProductInput): Promise<ProductResponse> {
-    await this.ensureSlugAvailable(input.slug);
+    const slug = input.slug ?? (await this.generateAvailableSlug(input.name));
+
+    if (input.slug) {
+      await this.ensureSlugAvailable(input.slug);
+    }
+
     await this.ensureCategoryActive(input.categoryId);
 
-    const product = await this.productsRepository.create(input);
+    const product = await this.productsRepository.create({ ...input, slug });
 
     return toProductResponse(product);
   }
@@ -68,6 +74,12 @@ export class ProductsService {
       throw new NotFoundException("Product not found");
     }
 
+    const slug = input.slug
+      ? input.slug
+      : input.name
+        ? await this.generateAvailableSlug(input.name, product.id)
+        : undefined;
+
     if (input.slug && input.slug !== product.slug) {
       await this.ensureSlugAvailable(input.slug);
     }
@@ -76,7 +88,10 @@ export class ProductsService {
       await this.ensureCategoryActive(input.categoryId);
     }
 
-    const updatedProduct = await this.productsRepository.update(id, input);
+    const updatedProduct = await this.productsRepository.update(id, {
+      ...input,
+      ...(slug ? { slug } : {}),
+    });
 
     return toProductResponse(updatedProduct);
   }
@@ -99,6 +114,25 @@ export class ProductsService {
     if (existingProduct) {
       throw new ConflictException("Product slug already exists");
     }
+  }
+
+  private async generateAvailableSlug(
+    name: string,
+    ignoredId?: string
+  ): Promise<string> {
+    const slug = createSlug(name);
+    const existingProduct = await this.productsRepository.findBySlug(slug);
+
+    if (!existingProduct || existingProduct.id === ignoredId) {
+      return slug;
+    }
+
+    let candidate = createSlugWithRandomSuffix(slug);
+    while (await this.productsRepository.findBySlug(candidate)) {
+      candidate = createSlugWithRandomSuffix(slug);
+    }
+
+    return candidate;
   }
 
   private async ensureCategoryActive(categoryId: string): Promise<void> {

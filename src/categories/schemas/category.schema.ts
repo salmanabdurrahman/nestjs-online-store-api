@@ -21,13 +21,15 @@ export const categoryListResponseSchema = z.object({
   }),
 });
 
+const slugSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be URL friendly");
+
 export const createCategorySchema = z.object({
   name: z.string().min(1).max(100),
-  slug: z
-    .string()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be URL friendly"),
+  slug: slugSchema.optional(),
   description: z.string().max(500).optional(),
   isActive: z.boolean().optional(),
 });

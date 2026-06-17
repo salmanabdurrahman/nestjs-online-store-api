@@ -38,7 +38,7 @@ const slugSchema = z
 export const createProductSchema = z.object({
   categoryId: z.string().uuid(),
   name: z.string().min(1).max(150),
-  slug: slugSchema,
+  slug: slugSchema.optional(),
   description: z.string().max(1000).optional(),
   price: z.coerce.number().positive(),
   stock: z.coerce.number().int().nonnegative(),
