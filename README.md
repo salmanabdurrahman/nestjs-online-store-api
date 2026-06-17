@@ -128,6 +128,26 @@ Deploy migrations for non-development environments:
 pnpm run prisma:migrate:deploy
 ```
 
+Seed local development data:
+
+```bash
+pnpm run prisma:seed
+```
+
+Seeder creates realistic demo data: 8 categories, 40 products, 11 users, active carts, and sample orders across `PENDING`, `PAID`, `CANCELLED`, and `FULFILLED` states. Seeded users share this local-only demo password:
+
+```txt
+Password123!
+```
+
+Useful demo accounts:
+
+```txt
+admin@onlinestore.test
+maya.putri@example.test
+bima.pratama@example.test
+```
+
 Open Prisma Studio when needed:
 
 ```bash

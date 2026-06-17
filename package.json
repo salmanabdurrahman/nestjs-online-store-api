@@ -16,6 +16,7 @@
     "postinstall": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:seed": "ts-node --compilerOptions '{\"rewriteRelativeImportExtensions\":false}' prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
@@ -116,7 +117,7 @@
         "lines": 60
       }
     },
-    "coverageDirectory": "../coverage", 
+    "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }
 }
