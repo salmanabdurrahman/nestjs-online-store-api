@@ -55,6 +55,28 @@ type CategoryListResponseBody = {
   };
 };
 
+type ProductResponseBody = {
+  id: string;
+  categoryId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  price: string;
+  stock: number;
+  isActive: boolean;
+  category?: CategoryResponseBody;
+};
+
+type ProductListResponseBody = {
+  data: ProductResponseBody[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 describe("AppController (e2e)", () => {
   let app: INestApplication<App>;
   const users: Array<{
@@ -75,6 +97,50 @@ describe("AppController (e2e)", () => {
     createdAt: Date;
     updatedAt: Date;
   }> = [];
+  const products: Array<{
+    id: string;
+    categoryId: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    price: { toString: () => string };
+    stock: number;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  const findCategory = (id: string) =>
+    categories.find((category) => category.id === id) ?? null;
+  const matchesProductWhere = (
+    product: (typeof products)[number],
+    where: Record<string, any>
+  ) => {
+    const category = findCategory(product.categoryId);
+    const price = Number(product.price.toString());
+
+    return (
+      (where.id === undefined || product.id === where.id) &&
+      (where.isActive === undefined || product.isActive === where.isActive) &&
+      (where.categoryId === undefined ||
+        product.categoryId === where.categoryId) &&
+      (where.category?.isActive === undefined ||
+        category?.isActive === where.category.isActive) &&
+      (where.category?.slug === undefined ||
+        category?.slug === where.category.slug) &&
+      (where.price?.gte === undefined || price >= Number(where.price.gte)) &&
+      (where.price?.lte === undefined || price <= Number(where.price.lte)) &&
+      (where.OR === undefined ||
+        where.OR.some((condition: Record<string, any>) => {
+          const search = String(
+            condition.name?.contains ?? condition.description?.contains
+          ).toLowerCase();
+          return (
+            product.name.toLowerCase().includes(search) ||
+            (product.description?.toLowerCase().includes(search) ?? false)
+          );
+        }))
+    );
+  };
   const prismaMock = {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
@@ -111,6 +177,78 @@ describe("AppController (e2e)", () => {
           return Promise.resolve(user);
         }
       ),
+    },
+    product: {
+      findMany: jest.fn(({ where, skip, take }) =>
+        Promise.resolve(
+          products
+            .filter((product) => matchesProductWhere(product, where))
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(skip, skip + take)
+        )
+      ),
+      count: jest.fn(({ where }) =>
+        Promise.resolve(
+          products.filter((product) => matchesProductWhere(product, where))
+            .length
+        )
+      ),
+      findFirst: jest.fn(({ where, include }) => {
+        const product = products.find(
+          (item) => item.id === where.id && matchesProductWhere(item, where)
+        );
+
+        return Promise.resolve(
+          product && include?.category
+            ? { ...product, category: findCategory(product.categoryId) }
+            : (product ?? null)
+        );
+      }),
+      findUnique: jest.fn(
+        ({ where }: { where: { id?: string; slug?: string } }) =>
+          Promise.resolve(
+            products.find(
+              (product) =>
+                product.id === where.id || product.slug === where.slug
+            ) ?? null
+          )
+      ),
+      create: jest.fn(({ data }) => {
+        const now = new Date();
+        const product = {
+          id: `20000000-0000-4000-8000-${String(products.length + 1).padStart(
+            12,
+            "0"
+          )}`,
+          categoryId: data.categoryId,
+          name: data.name,
+          slug: data.slug,
+          description: data.description ?? null,
+          price: { toString: () => Number(data.price).toFixed(2) },
+          stock: data.stock,
+          isActive: data.isActive ?? true,
+          createdAt: now,
+          updatedAt: now,
+        };
+        products.push(product);
+        return Promise.resolve(product);
+      }),
+      update: jest.fn(({ where, data }) => {
+        const product = products.find((item) => item.id === where.id);
+
+        if (!product) {
+          throw new Error("Product not found");
+        }
+
+        Object.assign(product, data, {
+          price:
+            data.price === undefined
+              ? product.price
+              : { toString: () => Number(data.price).toFixed(2) },
+          updatedAt: new Date(),
+        });
+        return Promise.resolve(product);
+      }),
     },
     category: {
       findMany: jest.fn(({ skip, take }: { skip: number; take: number }) =>
@@ -198,6 +336,7 @@ describe("AppController (e2e)", () => {
   beforeEach(async () => {
     users.length = 0;
     categories.length = 0;
+    products.length = 0;
     jest.clearAllMocks();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -406,6 +545,147 @@ describe("AppController (e2e)", () => {
 
     await request(app.getHttpServer())
       .get(`/api/v1/categories/${createdCategory.id}`)
+      .expect(404);
+  });
+
+  it("products relation CRUD flow", async () => {
+    const admin = {
+      id: "00000000-0000-4000-8000-000000000999",
+      email: "admin-products@example.com",
+      passwordHash: "not-used",
+      name: "Admin Products",
+      role: "ADMIN" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    users.push(admin);
+
+    const adminToken = await app.get(JwtService).signAsync({
+      sub: admin.id,
+      email: admin.email,
+      role: admin.role,
+    });
+
+    const categoryResponse = await request(app.getHttpServer())
+      .post("/api/v1/categories")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Electronics", slug: "electronics" })
+      .expect(201);
+
+    const category = categoryResponse.body as CategoryResponseBody;
+
+    await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .send({
+        categoryId: category.id,
+        name: "Laptop",
+        slug: "laptop",
+        price: 1500,
+        stock: 5,
+      })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        categoryId: "00000000-0000-4000-8000-000000000404",
+        name: "Invalid Product",
+        slug: "invalid-product",
+        price: 10,
+        stock: 1,
+      })
+      .expect(404);
+
+    await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        categoryId: category.id,
+        name: "Free Laptop",
+        slug: "free-laptop",
+        price: 0,
+        stock: 1,
+      })
+      .expect(400);
+
+    const createResponse = await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        categoryId: category.id,
+        name: "Laptop",
+        slug: "laptop",
+        description: "Portable computer",
+        price: 1500,
+        stock: 5,
+      })
+      .expect(201);
+
+    const createdProduct = createResponse.body as ProductResponseBody;
+
+    expect(createdProduct).toMatchObject({
+      categoryId: category.id,
+      name: "Laptop",
+      slug: "laptop",
+      description: "Portable computer",
+      price: "1500.00",
+      stock: 5,
+      isActive: true,
+    });
+
+    await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        categoryId: category.id,
+        name: "Duplicate Laptop",
+        slug: "laptop",
+        price: 100,
+        stock: 1,
+      })
+      .expect(409);
+
+    const listResponse = await request(app.getHttpServer())
+      .get(
+        "/api/v1/products?search=portable&categorySlug=electronics&minPrice=1000&maxPrice=2000"
+      )
+      .expect(200);
+
+    const listBody = listResponse.body as ProductListResponseBody;
+
+    expect(listBody.data).toHaveLength(1);
+    expect(listBody.data[0]).toMatchObject({ slug: "laptop" });
+
+    const detailResponse = await request(app.getHttpServer())
+      .get(`/api/v1/products/${createdProduct.id}`)
+      .expect(200);
+
+    expect(detailResponse.body).toMatchObject({
+      slug: "laptop",
+      category: { id: category.id, slug: "electronics" },
+    });
+
+    const updateResponse = await request(app.getHttpServer())
+      .patch(`/api/v1/products/${createdProduct.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Updated Laptop", stock: 3 })
+      .expect(200);
+
+    expect(updateResponse.body).toMatchObject({
+      name: "Updated Laptop",
+      stock: 3,
+    });
+
+    const deleteResponse = await request(app.getHttpServer())
+      .delete(`/api/v1/products/${createdProduct.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(deleteResponse.body).toMatchObject({ isActive: false });
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/products/${createdProduct.id}`)
       .expect(404);
   });
 
