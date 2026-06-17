@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { ZodSerializerInterceptor, ZodValidationPipe } from "nestjs-zod";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { setupOpenApi } from "./openapi";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -25,6 +26,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ZodValidationPipe());
   app.useGlobalInterceptors(new ZodSerializerInterceptor(reflector));
   app.useGlobalFilters(new HttpExceptionFilter());
+  await setupOpenApi(app);
 
   await app.listen(port);
   logger.log(`Application running on port ${port}`);
