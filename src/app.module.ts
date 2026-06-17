@@ -7,6 +7,7 @@ import { appConfig } from "./config/app.config";
 import { databaseConfig } from "./config/database.config";
 import { validateEnv } from "./config/env.schema";
 import { PrismaModule } from "./database/prisma.module";
+import { HealthModule } from "./health/health.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PrismaModule } from "./database/prisma.module";
       },
     ]),
     PrismaModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
