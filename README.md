@@ -169,10 +169,22 @@ Unit tests:
 pnpm run test
 ```
 
+Unit coverage:
+
+```bash
+pnpm run test:cov:unit
+```
+
 E2E tests:
 
 ```bash
 pnpm run test:e2e
+```
+
+E2E coverage is available separately when needed:
+
+```bash
+pnpm run test:cov:e2e
 ```
 
 Build:
@@ -180,6 +192,10 @@ Build:
 ```bash
 pnpm run build
 ```
+
+E2E specs live under `test/e2e/**/*.e2e-spec.ts` by module. Shared test bootstrap, in-memory Prisma support, auth helpers, fixtures, and assertions live under `test/support/**`.
+
+Unit coverage excludes generated Prisma client, bootstrap/module files, and declarative schema files so the report focuses on service, guard, filter, and config logic.
 
 E2E tests use `DATABASE_URL_TEST`. Make sure the test database exists and is safe for test setup reset operations.
 

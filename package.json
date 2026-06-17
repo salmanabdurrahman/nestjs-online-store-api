@@ -21,6 +21,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
+    "test:cov:unit": "jest --coverage --runInBand",
+    "test:cov:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json --coverage --runInBand",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json"
   },
@@ -92,9 +94,29 @@
       ]
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!generated/**",
+      "!main.ts",
+      "!**/*.module.ts",
+      "!**/*.schema.ts",
+      "!**/*.types.ts",
+      "!**/*.controller.ts",
+      "!**/*.repository.ts",
+      "!database/**",
+      "!common/decorators/**",
+      "!config/app.config.ts",
+      "!config/database.config.ts",
+      "!openapi.ts"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageThreshold": {
+      "global": {
+        "statements": 60,
+        "branches": 40,
+        "functions": 55,
+        "lines": 60
+      }
+    },
+    "coverageDirectory": "../coverage", 
     "testEnvironment": "node"
   }
 }

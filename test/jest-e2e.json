@@ -2,7 +2,7 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testMatch": ["<rootDir>/e2e/**/*.e2e-spec.ts"],
   "setupFiles": ["<rootDir>/setup-env.ts"],
   "resolver": "<rootDir>/jest-resolver.cjs",
   "transform": {
