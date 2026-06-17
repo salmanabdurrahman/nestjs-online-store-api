@@ -16,6 +16,12 @@ enum Role {
   ADMIN
 }
 
+enum CartStatus {
+  ACTIVE
+  CHECKED_OUT
+  ABANDONED
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -24,6 +30,7 @@ model User {
   role         Role     @default(CUSTOMER)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
+  carts        Cart[]
 
   @@map("users")
 }
@@ -42,18 +49,48 @@ model Category {
 }
 
 model Product {
-  id          String   @id @default(uuid()) @db.Uuid
-  categoryId  String   @map("category_id") @db.Uuid
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  id          String     @id @default(uuid()) @db.Uuid
+  categoryId  String     @map("category_id") @db.Uuid
+  category    Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   name        String
-  slug        String   @unique
+  slug        String     @unique
   description String?
-  price       Decimal  @db.Decimal(12, 2)
-  stock       Int      @default(0)
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  price       Decimal    @db.Decimal(12, 2)
+  stock       Int        @default(0)
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  cartItems   CartItem[]
 
   @@index([categoryId])
   @@map("products")
+}
+
+model Cart {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    CartStatus @default(ACTIVE)
+  items     CartItem[]
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@map("carts")
+}
+
+model CartItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  cartId            String   @map("cart_id") @db.Uuid
+  cart              Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId         String   @map("product_id") @db.Uuid
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity          Int
+  unitPriceSnapshot Decimal  @map("unit_price_snapshot") @db.Decimal(12, 2)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([cartId, productId])
+  @@index([productId])
+  @@map("cart_items")
 }

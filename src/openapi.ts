@@ -1,5 +1,6 @@
 import { INestApplication } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import type { Response } from "express";
 import { cleanupOpenApiDoc } from "nestjs-zod";
 
 const OPENAPI_PATH = "/openapi.json";
@@ -34,7 +35,9 @@ export async function setupOpenApi(app: INestApplication): Promise<void> {
   const httpAdapter = app.getHttpAdapter();
   const { apiReference } = await import("@scalar/nestjs-api-reference");
 
-  httpAdapter.get(OPENAPI_PATH, (_req, res) => res.json(document));
+  httpAdapter.get(OPENAPI_PATH, (_req: unknown, res: Response) =>
+    res.json(document)
+  );
   httpAdapter.get(
     DOCS_PATH,
     apiReference({
