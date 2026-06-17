@@ -17,7 +17,7 @@ env:
   NODE_ENV: test
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_online_store_test?schema=public
   DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/nestjs_online_store_test?schema=public
-  JWT_SECRET: ci-test-secret
+  JWT_SECRET: ci-test-secret-at-least-16-chars
   JWT_ACCESS_EXPIRES_IN: 15m
   CORS_ORIGINS: http://localhost:3000
 
