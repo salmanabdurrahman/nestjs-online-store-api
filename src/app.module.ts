@@ -6,6 +6,7 @@ import { AppService } from "./app.service";
 import { appConfig } from "./config/app.config";
 import { databaseConfig } from "./config/database.config";
 import { validateEnv } from "./config/env.schema";
+import { PrismaModule } from "./database/prisma.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { validateEnv } from "./config/env.schema";
         limit: 100,
       },
     ]),
+    PrismaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
