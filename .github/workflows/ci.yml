@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_online_store_test?schema=public
+  DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/nestjs_online_store_test?schema=public
+  JWT_SECRET: ci-test-secret
+  JWT_ACCESS_EXPIRES_IN: 15m
+  CORS_ORIGINS: http://localhost:3000
+
+jobs:
+  ci:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nestjs_online_store_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nestjs_online_store_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Run database migrations
+        run: pnpm prisma:migrate:deploy
+
+      - name: Check formatting
+        run: pnpm exec prettier --check "src/**/*.ts" "test/**/*.ts" "prisma/**/*.ts"
+
+      - name: Lint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts" --max-warnings=0
+
+      - name: Unit tests with coverage
+        run: pnpm test:cov:unit
+
+      - name: E2E tests with coverage
+        run: pnpm test:cov:e2e
+
+      - name: Build
+        run: pnpm build
