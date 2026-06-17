@@ -11,6 +11,7 @@ import { databaseConfig } from "./config/database.config";
 import { validateEnv } from "./config/env.schema";
 import { PrismaModule } from "./database/prisma.module";
 import { HealthModule } from "./health/health.module";
+import { OrdersModule } from "./orders/orders.module";
 import { ProductsModule } from "./products/products.module";
 
 @Module({
@@ -32,6 +33,7 @@ import { ProductsModule } from "./products/products.module";
     CategoriesModule,
     ProductsModule,
     CartsModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

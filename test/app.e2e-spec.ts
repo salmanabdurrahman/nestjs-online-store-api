@@ -91,6 +91,21 @@ type CartResponseBody = {
   }>;
 };
 
+type OrderResponseBody = {
+  id: string;
+  userId: string;
+  status: "PENDING" | "PAID" | "CANCELLED" | "FULFILLED";
+  totalAmount: string;
+  items: Array<{
+    id: string;
+    productId: string;
+    quantity: number;
+    unitPriceSnapshot: string;
+    subtotal: string;
+    product: ProductResponseBody;
+  }>;
+};
+
 describe("AppController (e2e)", () => {
   let app: INestApplication<App>;
   const users: Array<{
@@ -135,7 +150,28 @@ describe("AppController (e2e)", () => {
     cartId: string;
     productId: string;
     quantity: number;
+    unitPriceSnapshot: {
+      toString: () => string;
+      mul: (value: unknown) => { toString: () => string };
+    };
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  const orders: Array<{
+    id: string;
+    userId: string;
+    status: "PENDING" | "PAID" | "CANCELLED" | "FULFILLED";
+    totalAmount: { toString: () => string };
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  const orderItems: Array<{
+    id: string;
+    orderId: string;
+    productId: string;
+    quantity: number;
     unitPriceSnapshot: { toString: () => string };
+    subtotal: { toString: () => string };
     createdAt: Date;
     updatedAt: Date;
   }> = [];
@@ -149,6 +185,16 @@ describe("AppController (e2e)", () => {
       .filter((item) => item.cartId === cart.id)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map((item) => ({ ...item, product: findProduct(item.productId) })),
+  });
+  const serializeOrder = (order: (typeof orders)[number]) => ({
+    ...order,
+    items: orderItems
+      .filter((item) => item.orderId === order.id)
+      .map((item) => ({ ...item, product: findProduct(item.productId) })),
+  });
+  const decimal = (value: unknown) => ({
+    toString: () => Number(value).toFixed(2),
+    mul: (quantity: unknown) => decimal(Number(value) * Number(quantity)),
   });
   const matchesProductWhere = (
     product: (typeof products)[number],
@@ -184,6 +230,9 @@ describe("AppController (e2e)", () => {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([{ "?column?": 1 }]),
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+      callback(prismaMock)
+    ),
     user: {
       findUnique: jest.fn(
         ({ where }: { where: { id?: string; email?: string } }) =>
@@ -263,7 +312,7 @@ describe("AppController (e2e)", () => {
           name: data.name,
           slug: data.slug,
           description: data.description ?? null,
-          price: { toString: () => Number(data.price).toFixed(2) },
+          price: decimal(data.price),
           stock: data.stock,
           isActive: data.isActive ?? true,
           createdAt: now,
@@ -280,13 +329,30 @@ describe("AppController (e2e)", () => {
         }
 
         Object.assign(product, data, {
-          price:
-            data.price === undefined
-              ? product.price
-              : { toString: () => Number(data.price).toFixed(2) },
+          price: data.price === undefined ? product.price : decimal(data.price),
+          stock:
+            data.stock?.decrement === undefined
+              ? (data.stock ?? product.stock)
+              : product.stock - data.stock.decrement,
           updatedAt: new Date(),
         });
         return Promise.resolve(product);
+      }),
+      updateMany: jest.fn(({ where, data }) => {
+        const product = products.find(
+          (item) =>
+            item.id === where.id &&
+            item.isActive === where.isActive &&
+            item.stock >= where.stock.gte
+        );
+
+        if (!product) {
+          return Promise.resolve({ count: 0 });
+        }
+
+        product.stock -= data.stock.decrement;
+        product.updatedAt = new Date();
+        return Promise.resolve({ count: 1 });
       }),
     },
     cart: {
@@ -312,6 +378,16 @@ describe("AppController (e2e)", () => {
         carts.push(cart);
         return Promise.resolve(cart);
       }),
+      update: jest.fn(({ where, data }) => {
+        const cart = carts.find((item) => item.id === where.id);
+
+        if (!cart) {
+          throw new Error("Cart not found");
+        }
+
+        Object.assign(cart, data, { updatedAt: new Date() });
+        return Promise.resolve(cart);
+      }),
     },
     cartItem: {
       create: jest.fn(({ data }) => {
@@ -324,9 +400,7 @@ describe("AppController (e2e)", () => {
           cartId: data.cartId,
           productId: data.productId,
           quantity: data.quantity,
-          unitPriceSnapshot: {
-            toString: () => Number(data.unitPriceSnapshot).toFixed(2),
-          },
+          unitPriceSnapshot: decimal(data.unitPriceSnapshot),
           createdAt: now,
           updatedAt: now,
         };
@@ -352,6 +426,66 @@ describe("AppController (e2e)", () => {
 
         const [deleted] = cartItems.splice(index, 1);
         return Promise.resolve(deleted);
+      }),
+    },
+    order: {
+      findMany: jest.fn(({ where }) =>
+        Promise.resolve(
+          orders
+            .filter(
+              (order) =>
+                where?.userId === undefined || order.userId === where.userId
+            )
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .map(serializeOrder)
+        )
+      ),
+      findUnique: jest.fn(({ where, include }) => {
+        const order = orders.find((item) => item.id === where.id) ?? null;
+
+        return Promise.resolve(
+          order && include?.items ? serializeOrder(order) : order
+        );
+      }),
+      create: jest.fn(({ data, include }) => {
+        const now = new Date();
+        const order = {
+          id: `50000000-0000-4000-8000-${String(orders.length + 1).padStart(
+            12,
+            "0"
+          )}`,
+          userId: data.userId,
+          status: data.status,
+          totalAmount: decimal(data.totalAmount),
+          createdAt: now,
+          updatedAt: now,
+        };
+        orders.push(order);
+        data.items.create.forEach((item: any) => {
+          orderItems.push({
+            id: `60000000-0000-4000-8000-${String(
+              orderItems.length + 1
+            ).padStart(12, "0")}`,
+            orderId: order.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPriceSnapshot: decimal(item.unitPriceSnapshot),
+            subtotal: decimal(item.subtotal),
+            createdAt: now,
+            updatedAt: now,
+          });
+        });
+        return Promise.resolve(include?.items ? serializeOrder(order) : order);
+      }),
+      update: jest.fn(({ where, data, include }) => {
+        const order = orders.find((item) => item.id === where.id);
+
+        if (!order) {
+          throw new Error("Order not found");
+        }
+
+        Object.assign(order, data, { updatedAt: new Date() });
+        return Promise.resolve(include?.items ? serializeOrder(order) : order);
       }),
     },
     category: {
@@ -443,6 +577,8 @@ describe("AppController (e2e)", () => {
     products.length = 0;
     carts.length = 0;
     cartItems.length = 0;
+    orders.length = 0;
+    orderItems.length = 0;
     jest.clearAllMocks();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -795,6 +931,29 @@ describe("AppController (e2e)", () => {
       .expect(404);
   });
 
+  const createUserToken = async (
+    id: string,
+    email: string,
+    role: "CUSTOMER" | "ADMIN"
+  ) => {
+    const user = {
+      id,
+      email,
+      passwordHash: "not-used",
+      name: email,
+      role,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    users.push(user);
+
+    return app.get(JwtService).signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+  };
+
   it("cart flow", async () => {
     const admin = {
       id: "00000000-0000-4000-8000-000000000999",
@@ -925,6 +1084,165 @@ describe("AppController (e2e)", () => {
       .expect(200);
 
     expect((removeResponse.body as CartResponseBody).items).toEqual([]);
+  });
+
+  it("orders checkout flow", async () => {
+    const adminToken = await createUserToken(
+      "00000000-0000-4000-8000-000000000998",
+      "admin-orders@example.com",
+      "ADMIN"
+    );
+    const customerId = "00000000-0000-4000-8000-000000000112";
+    const customerToken = await createUserToken(
+      customerId,
+      "customer-orders@example.com",
+      "CUSTOMER"
+    );
+
+    const categoryResponse = await request(app.getHttpServer())
+      .post("/api/v1/categories")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Order Books", slug: "order-books" })
+      .expect(201);
+
+    const category = categoryResponse.body as CategoryResponseBody;
+
+    const productResponse = await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        categoryId: category.id,
+        name: "Order Book",
+        slug: "order-book",
+        price: 30,
+        stock: 5,
+      })
+      .expect(201);
+
+    const product = productResponse.body as ProductResponseBody;
+
+    await request(app.getHttpServer())
+      .post("/api/v1/orders/checkout")
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post("/api/v1/orders/checkout")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post("/api/v1/cart/items")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .send({ productId: product.id, quantity: 2 })
+      .expect(201);
+
+    const checkoutResponse = await request(app.getHttpServer())
+      .post("/api/v1/orders/checkout")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .expect(201);
+
+    const order = checkoutResponse.body as OrderResponseBody;
+
+    expect(order).toMatchObject({
+      userId: customerId,
+      status: "PENDING",
+      totalAmount: "60.00",
+    });
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0]).toMatchObject({
+      productId: product.id,
+      quantity: 2,
+      unitPriceSnapshot: "30.00",
+      subtotal: "60.00",
+    });
+    expect(findProduct(product.id)?.stock).toBe(3);
+
+    const cartAfterCheckout = await request(app.getHttpServer())
+      .get("/api/v1/cart")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .expect(200);
+
+    expect((cartAfterCheckout.body as CartResponseBody).items).toEqual([]);
+
+    const listResponse = await request(app.getHttpServer())
+      .get("/api/v1/orders")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .expect(200);
+
+    expect(
+      (listResponse.body as { data: OrderResponseBody[] }).data
+    ).toHaveLength(1);
+
+    const detailResponse = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}`)
+      .set("Authorization", `Bearer ${customerToken}`)
+      .expect(200);
+
+    expect(detailResponse.body).toMatchObject({ id: order.id });
+
+    const statusResponse = await request(app.getHttpServer())
+      .patch(`/api/v1/orders/${order.id}/status`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "PAID" })
+      .expect(200);
+
+    expect(statusResponse.body).toMatchObject({ status: "PAID" });
+  });
+
+  it("rejects checkout when stock becomes insufficient", async () => {
+    const adminToken = await createUserToken(
+      "00000000-0000-4000-8000-000000000997",
+      "admin-stock@example.com",
+      "ADMIN"
+    );
+    const customerToken = await createUserToken(
+      "00000000-0000-4000-8000-000000000113",
+      "customer-stock@example.com",
+      "CUSTOMER"
+    );
+
+    const categoryResponse = await request(app.getHttpServer())
+      .post("/api/v1/categories")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Stock Books", slug: "stock-books" })
+      .expect(201);
+
+    const category = categoryResponse.body as CategoryResponseBody;
+
+    const productResponse = await request(app.getHttpServer())
+      .post("/api/v1/products")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        categoryId: category.id,
+        name: "Stock Book",
+        slug: "stock-book",
+        price: 10,
+        stock: 2,
+      })
+      .expect(201);
+
+    const product = productResponse.body as ProductResponseBody;
+
+    await request(app.getHttpServer())
+      .post("/api/v1/cart/items")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .send({ productId: product.id, quantity: 2 })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/products/${product.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ stock: 1 })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post("/api/v1/orders/checkout")
+      .set("Authorization", `Bearer ${customerToken}`)
+      .expect(400);
+
+    expect(orders).toHaveLength(0);
+    expect(orderItems).toHaveLength(0);
+    expect(findProduct(product.id)?.stock).toBe(1);
   });
 
   afterEach(async () => {
