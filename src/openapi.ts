@@ -1,10 +1,18 @@
 import { INestApplication } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { cleanupOpenApiDoc } from "nestjs-zod";
 
 const OPENAPI_PATH = "/openapi.json";
 const DOCS_PATH = "/docs";
+const SCALAR_DOCS_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+].join("; ");
 
 export async function setupOpenApi(app: INestApplication): Promise<void> {
   const config = new DocumentBuilder()
@@ -38,13 +46,13 @@ export async function setupOpenApi(app: INestApplication): Promise<void> {
   httpAdapter.get(OPENAPI_PATH, (_req: unknown, res: Response) =>
     res.json(document)
   );
-  httpAdapter.get(
-    DOCS_PATH,
-    apiReference({
-      pageTitle: "NestJS Online Store API Docs",
-      content: {
-        url: OPENAPI_PATH,
-      },
-    })
-  );
+  const scalarDocsHandler = apiReference({
+    pageTitle: "NestJS Online Store API Docs",
+    url: OPENAPI_PATH,
+  });
+
+  httpAdapter.get(DOCS_PATH, (req: Request, res: Response) => {
+    res.setHeader("Content-Security-Policy", SCALAR_DOCS_CSP);
+    scalarDocsHandler(req, res);
+  });
 }
