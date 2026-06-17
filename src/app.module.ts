@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
+import { AuthModule } from "./auth/auth.module";
 import { appConfig } from "./config/app.config";
 import { databaseConfig } from "./config/database.config";
 import { validateEnv } from "./config/env.schema";
@@ -24,6 +25,7 @@ import { HealthModule } from "./health/health.module";
     ]),
     PrismaModule,
     HealthModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
